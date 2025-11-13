@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1] - 2025-11-13
+
+### Changed
+- Removed some of `loeffner/KOReader.patches` from the default patch repository list. ([#3](https://github.com/advokatb/updatesmanager.koplugin/pull/3))
+- Added `kristianpennacchia/WordReference.koplugin` to the default plugin repositories. ([#2](https://github.com/advokatb/updatesmanager.koplugin/pull/2))
+
 ## [1.0.0] - 2025-11-12
 
 ### Added
@@ -66,7 +72,7 @@
 ### Default Repositories
 
 <details>
-<summary><strong>Patch Repositories (8)</strong></summary>
+<summary><strong>Patch Repositories (7)</strong></summary>
 
 - joshuacant/KOReader.patches
 - angelsangita/Koreader-Patches
@@ -74,13 +80,12 @@
 - sebdelsol/KOReader.patches
 - zenixlabs/koreader-frankenpatches-public
 - omer-faruq/koreader-user-patches
-- loeffner/KOReader.patches (collection and project-title subfolders)
 - advokatb/KOReader-Patches
 
 </details>
 
 <details>
-<summary><strong>Plugin Repositories (22)</strong></summary>
+<summary><strong>Plugin Repositories (23)</strong></summary>
 
 - loeffner/WeatherLockscreen
 - advokatb/readingstreak.koplugin
@@ -95,6 +100,7 @@
 - Billiam/crashlog.koplugin
 - kodermike/airplanemode.koplugin
 - kristianpennacchia/zzz-readermenuredesign.koplugin
+- kristianpennacchia/WordReference.koplugin
 - patelneeraj/filebrowserplus.koplugin
 - omer-faruq/webbrowser.koplugin
 - Billiam/hardcoverapp.koplugin

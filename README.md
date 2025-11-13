@@ -508,7 +508,6 @@ The plugin includes support for the following patch repositories by default:
 - sebdelsol/KOReader.patches
 - zenixlabs/koreader-frankenpatches-public
 - omer-faruq/koreader-user-patches
-- loeffner/KOReader.patches (collection and project-title subfolders)
 - advokatb/KOReader-Patches
 
 And the following plugin repositories:
@@ -526,6 +525,7 @@ And the following plugin repositories:
 - Billiam/crashlog.koplugin
 - kodermike/airplanemode.koplugin
 - kristianpennacchia/zzz-readermenuredesign.koplugin
+- kristianpennacchia/WordReference.koplugin
 - patelneeraj/filebrowserplus.koplugin
 - omer-faruq/webbrowser.koplugin
 - Billiam/hardcoverapp.koplugin
