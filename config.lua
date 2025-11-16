@@ -1,7 +1,7 @@
 --[[--
 Configuration for Updates Manager plugin
 Contains repository lists and settings
-]]--
+]] --
 
 local DataStorage = require("datastorage")
 local json = require("json")
@@ -187,6 +187,11 @@ Config.DEFAULT_PLUGIN_REPOS = {
         repo = "Koreader-Menu-customizer",
         description = "Menu Customizer plugin",
     },
+    {
+        owner = "dani84bs",
+        repo = "AnnotationSync.koplugin",
+        description = "Sync annotations between devices",
+    }
 }
 
 -- Paths
@@ -245,22 +250,22 @@ function Config.loadRepositories()
         patches = {},
         plugins = {},
     }
-    
+
     -- Start with defaults
     for _, repo in ipairs(Config.DEFAULT_PATCH_REPOS) do
         table.insert(repos.patches, repo)
     end
-    
+
     for _, repo in ipairs(Config.DEFAULT_PLUGIN_REPOS) do
         table.insert(repos.plugins, repo)
     end
-    
+
     -- Try to load custom config
     local config_file = io.open(Config.CONFIG_FILE, "r")
     if config_file then
         local content = config_file:read("*a")
         config_file:close()
-        
+
         local ok, custom_config = pcall(json.decode, content)
         if ok and custom_config then
             -- Merge custom repositories
@@ -276,7 +281,7 @@ function Config.loadRepositories()
             end
         end
     end
-    
+
     return repos
 end
 
@@ -287,13 +292,13 @@ function Config.saveRepositories(repos)
         logger.err("UpdatesManager: Failed to encode repository configuration")
         return false
     end
-    
+
     -- Ensure settings directory exists
     local settings_dir = DataStorage:getSettingsDir()
     if lfs.attributes(settings_dir, "mode") ~= "directory" then
         lfs.mkdir(settings_dir)
     end
-    
+
     local config_file = io.open(Config.CONFIG_FILE, "w")
     if config_file then
         config_file:write(content)
@@ -306,4 +311,3 @@ function Config.saveRepositories(repos)
 end
 
 return Config
-
