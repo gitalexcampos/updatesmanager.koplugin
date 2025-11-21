@@ -516,26 +516,18 @@ And the following plugin repositories:
 - loeffner/WeatherLockscreen
 - advokatb/readingstreak.koplugin
 - advokatb/updatesmanager.koplugin
-- bozo22/imagebookmarks.koplugin
-- roygbyte/weather.koplugin
 - marinov752/emailtokoreader.koplugin
 - omer-faruq/memobook.koplugin
-- 0zd3m1r/koreader-booknotes-plugin
 - omer-faruq/rssreader.koplugin
-- 0zd3m1r/koreader-xray-plugin
-- Billiam/crashlog.koplugin
 - kodermike/airplanemode.koplugin
 - kristianpennacchia/zzz-readermenuredesign.koplugin
-- kristianpennacchia/WordReference.koplugin
+- kristianpennacchia/wordreference.koplugin
 - patelneeraj/filebrowserplus.koplugin
 - omer-faruq/webbrowser.koplugin
-- Billiam/hardcoverapp.koplugin
 - omer-faruq/assistant.koplugin
-- monk-blade/multiline-toc-koreader
 - 0xmiki/telegramhighlights.koplugin
-- Evgeniy-94/TelegramDownloader.koplugin
-- joshuacant/ProjectTitle
 - JoeBumm/Koreader-Menu-customizer
+- dani84bs/AnnotationSync.koplugin
 
 </details>
 

@@ -68,6 +68,20 @@ Config.DEFAULT_PATCH_REPOS = {
         path = "",
         description = "Advokatb's patches",
     },
+    {
+        owner = "prashanthglen",
+        repo = "kojustifystatusbar",
+        branch = "main",
+        path = "",
+        description = "Justify status bar patch",
+    },
+    {
+        owner = "clarainna",
+        repo = "KOReader-Patches",
+        branch = "main",
+        path = "",
+        description = "Clarainna's patches",
+    },
 }
 
 -- Default list of plugin repositories
@@ -88,16 +102,6 @@ Config.DEFAULT_PLUGIN_REPOS = {
         description = "Updates Manager plugin",
     },
     {
-        owner = "bozo22",
-        repo = "imagebookmarks.koplugin",
-        description = "Image Bookmarks plugin",
-    },
-    {
-        owner = "roygbyte",
-        repo = "weather.koplugin",
-        description = "Weather plugin",
-    },
-    {
         owner = "marinov752",
         repo = "emailtokoreader.koplugin",
         description = "Email to KOReader plugin",
@@ -108,30 +112,15 @@ Config.DEFAULT_PLUGIN_REPOS = {
         description = "Memo Book plugin",
     },
     {
-        owner = "0zd3m1r",
-        repo = "koreader-booknotes-plugin",
-        description = "Book Notes plugin",
-    },
-    {
         owner = "omer-faruq",
         repo = "rssreader.koplugin",
         description = "RSS Reader plugin",
     },
     {
-        owner = "0zd3m1r",
-        repo = "koreader-xray-plugin",
-        description = "X-Ray plugin",
+        owner = "kodermike",
+        repo = "airplanemode.koplugin",
+        description = "Airplane Mode plugin",
     },
-    {
-        owner = "Billiam",
-        repo = "crashlog.koplugin",
-        description = "Crash Log plugin",
-    },
-    -- {
-    --     owner = "kodermike",
-    --     repo = "airplanemode.koplugin",
-    --     description = "Airplane Mode plugin",
-    -- },
     {
         owner = "kristianpennacchia",
         repo = "zzz-readermenuredesign.koplugin",
@@ -152,36 +141,16 @@ Config.DEFAULT_PLUGIN_REPOS = {
         repo = "webbrowser.koplugin",
         description = "Web Browser plugin",
     },
-    -- {
-    --     owner = "Billiam",
-    --     repo = "hardcoverapp.koplugin",
-    --     description = "Hardcover App plugin",
-    -- },
     {
         owner = "omer-faruq",
         repo = "assistant.koplugin",
         description = "AI Assistant plugin",
     },
     {
-        owner = "monk-blade",
-        repo = "multiline-toc-koreader",
-        description = "Multiline TOC plugin",
-    },
-    {
         owner = "0xmiki",
         repo = "telegramhighlights.koplugin",
         description = "Telegram Highlights plugin",
     },
-    {
-        owner = "Evgeniy-94",
-        repo = "TelegramDownloader.koplugin",
-        description = "Telegram Downloader plugin",
-    },
-    -- {
-    --     owner = "joshuacant",
-    --     repo = "ProjectTitle",
-    --     description = "Project Title plugin",
-    -- },
     {
         owner = "JoeBumm",
         repo = "Koreader-Menu-customizer",
@@ -191,7 +160,53 @@ Config.DEFAULT_PLUGIN_REPOS = {
         owner = "dani84bs",
         repo = "AnnotationSync.koplugin",
         description = "Sync annotations between devices",
-    }
+    },
+    -- {
+    --     owner = "joshuacant",
+    --     repo = "ProjectTitle",
+    --     description = "Project Title plugin",
+    -- },
+    -- Commented out repositories (no proper releases)
+    -- {
+    --     owner = "bozo22",
+    --     repo = "imagebookmarks.koplugin",
+    --     description = "Image Bookmarks plugin",
+    -- },
+    -- {
+    --     owner = "roygbyte",
+    --     repo = "weather.koplugin",
+    --     description = "Weather plugin",
+    -- },
+    -- {
+    --     owner = "0zd3m1r",
+    --     repo = "koreader-booknotes-plugin",
+    --     description = "Book Notes plugin",
+    -- },
+    -- {
+    --     owner = "0zd3m1r",
+    --     repo = "koreader-xray-plugin",
+    --     description = "X-Ray plugin",
+    -- },
+    -- {
+    --     owner = "Billiam",
+    --     repo = "crashlog.koplugin",
+    --     description = "Crash Log plugin",
+    -- },
+    -- {
+    --     owner = "Billiam",
+    --     repo = "hardcoverapp.koplugin",
+    --     description = "Hardcover App plugin",
+    -- },
+    -- {
+    --     owner = "monk-blade",
+    --     repo = "multiline-toc-koreader",
+    --     description = "Multiline TOC plugin",
+    -- },
+    -- {
+    --     owner = "Evgeniy-94",
+    --     repo = "TelegramDownloader.koplugin",
+    --     description = "Telegram Downloader plugin",
+    -- },
 }
 
 -- Paths
