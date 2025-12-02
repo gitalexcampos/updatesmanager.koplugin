@@ -104,11 +104,17 @@ end
 
 -- Compare versions (semantic versioning)
 -- Returns: true if v1 is newer than v2, false otherwise
+-- Supports: "1.0.0", "v1.0.0", or numeric values (converted to string)
 function PluginManager.isVersionNewer(v1_str, v2_str)
     if not v1_str or not v2_str then return false end
+    
+    -- Convert to strings if they are numbers (handles cases where version is numeric in _meta.lua)
+    v1_str = tostring(v1_str)
+    v2_str = tostring(v2_str)
+    
     if v1_str == v2_str then return false end
     
-    -- Strip optional leading 'v'
+    -- Strip optional leading 'v' prefix (handles "v1.0.0" format)
     v1_str = v1_str:match("^v?(.*)$")
     v2_str = v2_str:match("^v?(.*)$")
     

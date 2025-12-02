@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.7] - 2025-01-XX
+
+### Fixed
+- Fixed crash when comparing plugin versions: handle cases where version in `_meta.lua` is stored as a number instead of a string (e.g., `version = 1.0` instead of `version = "1.0.0"`).
+
+### Added
+- Added `reuerendo/koreader-patches` to default patch repositories.
+
 ## [1.0.6] - 2025-01-XX
 
 ### Added

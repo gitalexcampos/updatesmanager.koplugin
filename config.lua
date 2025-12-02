@@ -89,6 +89,13 @@ Config.DEFAULT_PATCH_REPOS = {
         path = "",
         description = "Whatsnewsisyphus's patches",
     },
+    {
+        owner = "reuerendo",
+        repo = "koreader-patches",
+        branch = "main",
+        path = "",
+        description = "Reuerendo's patches",
+    },
 }
 
 -- Default list of plugin repositories
@@ -233,6 +240,16 @@ Config.DEFAULT_PLUGIN_REPOS = {
     --     owner = "greywolf1499",
     --     repo = "opds_plus.koplugin",
     --     description = "OPDS Plus plugin",
+    -- },
+    -- {
+    --     owner = "TomasDiLeo",
+    --     repo = "lightsout.koplugin",
+    --     description = "Lights Out plugin",
+    -- },
+    -- {
+    --     owner = "jasonchoimtt",
+    --     repo = "koreader-syncthing",
+    --     description = "Syncthing plugin",
     -- },
 }
 
