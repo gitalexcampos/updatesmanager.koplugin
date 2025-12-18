@@ -16,8 +16,9 @@ Updates Manager is a plugin for KOReader that helps you manage updates for patch
 - **Progress Display**: Real-time progress updates during update checks
 - **Safe Installation**: Backs up existing files before updating
 - **MD5 Verification**: Validates file integrity using MD5 checksums
-- **Patch Descriptions**: Automatic extraction from `updates.json`, fallback to comments, local editing
+- **Patch Descriptions**: Automatic extraction from comments, local editing
 - **Plugin Version Management**: Automatic version comparison for plugins
+- **Install New Plugins**: Install plugins from default repositories that are not yet installed
 - **Network Management**: Automatic Wi-Fi connection handling
 - **Error Handling**: Graceful handling of network errors and API limits
 
@@ -48,6 +49,7 @@ The plugin menu is organized into three main sections:
 - **Plugins**: Manage plugin updates
   - Check for Updates
   - Force Refresh
+  - Install New Plugins
   - Installed Plugins
 - **Settings**: Configuration options
   - Repository Settings
@@ -149,8 +151,7 @@ my-custom-patch
 #### Adding Your Patch Repository
 
 1. **Create a GitHub repository** with your patches (e.g., `KOReader.patches`)
-2. **Optionally create `updates.json`** (see below) for better metadata
-3. **Add your repository** to the plugin configuration (see Repository Configuration)
+2. **Add your repository** to the plugin configuration (see Repository Configuration)
 
 **Want to add your repository to the default list?**
 
@@ -161,86 +162,10 @@ You can create a pull request to add your repository to the plugin's default rep
 3. Create a pull request with a description of your patches repository
 4. Your PR will be reviewed and merged, making your patches available to all users
 
-<a id="creating-updates-json"></a>
-#### Creating `updates.json` for Your Repository
+<a id="patch-descriptions-from-comments"></a>
+#### Patch Descriptions from Comments
 
-To provide patch descriptions and metadata, create an `updates.json` file in your repository root (or in the same folder as your patches if they're in a subfolder).
-
-**File Location:**
-- **Root of repository**: `updates.json`
-- **Subfolder with patches**: `subfolder/updates.json`
-
-**File Format:**
-
-```json
-{
-  "patches": [
-    {
-      "name": "2-custom-folder-fonts",
-      "filename": "2-custom-folder-fonts.lua",
-      "description": "Allows customizing folder fonts in KOReader. You can set different fonts for different folders in the file manager.",
-      "author": "your-username",
-      "version": "1.0.0",
-      "md5": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
-    },
-    {
-      "name": "2-percent-badge",
-      "filename": "2-percent-badge.lua",
-      "description": "Shows reading progress percentage as a badge on the book cover",
-      "author": "your-username",
-      "version": "1.2.0",
-      "md5": "b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7"
-    }
-  ]
-}
-```
-
-**Fields:**
-- **`name`** (required): Patch name without `.lua` extension
-- **`filename`** (optional): Full filename with extension
-- **`description`** (optional): Human-readable description
-- **`author`** (optional): Author name or GitHub username
-- **`version`** (optional): Version string
-- **`md5`** (optional but recommended): MD5 hash of the patch file. If provided, the plugin will use it directly instead of computing on-the-fly, reducing API calls
-
-<a id="automatic-generation-github-actions"></a>
-#### Automatic Generation with GitHub Actions
-
-You can use GitHub Actions to automatically generate `updates.json` with MD5 hashes. 
-
-**For patch repositories:**
-- Copy `.github/workflows/generate-patch-updates-json.yml` from this plugin repository to your patch repository
-- Place it in `.github/workflows/generate-updates-json.yml` (or keep the original name)
-- The workflow will automatically run on every push to main/master branch
-
-**For plugin repositories:**
-- Copy `.github/workflows/generate-plugin-updates-json.yml` from this plugin repository to your plugin repository
-- Place it in `.github/workflows/generate-updates-json.yml` (or keep the original name)
-- The workflow will automatically run when `_meta.lua` or other `.lua` files are changed
-
-**Note:** Both workflow files are included in the Updates Manager plugin repository as templates/examples. You only need to copy the one that matches your repository type (patches or plugins).
-
-**For patch repositories, the action will:**
-- Scan all `.lua` files (excluding `.disabled` files)
-- Calculate MD5 hashes for each patch
-- Extract descriptions from patch file comments
-- Generate `updates.json` with patches array on every push to main/master branch
-
-**For plugin repositories, the action will:**
-- Extract plugin metadata from `_meta.lua` (name, version, description)
-- Fetch latest release information from GitHub API
-- Generate `updates.json` with plugin metadata
-
-**How MD5 is used (for patches):**
-- If `updates.json` contains MD5 hashes, the plugin uses them directly (faster, fewer API calls)
-- If `updates.json` is not available or doesn't contain MD5, the plugin computes MD5 on-the-fly
-
-**Note:** For plugins, `updates.json` is optional. The plugin primarily uses GitHub Releases for version checking. The `updates.json` for plugins can provide additional metadata but is not required for updates to work.
-
-<a id="fallback-to-comments"></a>
-#### Fallback to Comments
-
-If `updates.json` is not available, the plugin will automatically extract descriptions from comments at the beginning of patch files:
+The plugin automatically extracts descriptions from comments at the beginning of patch files:
 
 ```lua
 -- This patch allows customizing folder fonts
@@ -266,10 +191,7 @@ Patch descriptions are loaded in the following priority order:
    - Stored in `KOReader/settings/updatesmanager_patch_descriptions.json`
    - Can be edited through the plugin UI
 
-2. **`updates.json` from repository**
-   - Loaded from repository root or patch subfolder
-
-3. **Comments in patch files** (lowest priority)
+2. **Comments in patch files** (fallback)
    - Parsed from comment lines at the beginning of patch files
 
 ---
@@ -299,6 +221,25 @@ Patch descriptions are loaded in the following priority order:
 3. Tap on a plugin to see detailed information (version, description, path)
 
 **Note**: Default KOReader plugins (like `archiveviewer`, `autodim`, etc.) are hidden from this list as they are updated with KOReader itself.
+
+<a id="installing-new-plugins"></a>
+#### Installing New Plugins
+
+You can install plugins from the default repositories that are not yet installed on your device:
+
+1. Navigate to **Updates Manager** → **Plugins** → **Install New Plugins**
+2. The plugin will scan all active repositories from `DEFAULT_PLUGIN_REPOS` and show only those that are not currently installed
+3. Select which plugins you want to install using checkboxes (all are unchecked by default)
+4. Long-press on any plugin to view detailed information (description, release notes)
+5. Click **Install Selected** to download and install the selected plugins
+
+**How it works:**
+- Downloads the latest release ZIP asset from GitHub
+- Validates ZIP structure (must contain a single `*.koplugin` folder at the root)
+- Extracts the plugin to `KOReader/plugins/` directory
+- Automatically detects installed plugins even if they don't have a valid `_meta.lua` file
+
+**Note**: Only plugins from active (non-commented) repositories in `DEFAULT_PLUGIN_REPOS` are shown. Custom repositories and commented-out repositories are not included.
 
 <a id="plugins-for-authors"></a>
 ### For Plugin Authors
@@ -585,7 +526,6 @@ And the following plugin repositories:
 <a id="description-not-showing"></a>
 ### Description Not Showing
 
-- Ensure `updates.json` is in the correct location
 - Check that patch file has comments at the beginning
 - Try editing description locally through the plugin
 

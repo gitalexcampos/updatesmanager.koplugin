@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0] - 2025-12-17
+
+### Added
+- **Install New Plugins**: Install plugins from the active `DEFAULT_PLUGIN_REPOS` list (GitHub Releases assets).
+  - Shows only repositories that are not currently installed.
+  - Installs by downloading the latest release ZIP asset and extracting it to `KOReader/plugins/`.
+  - Validates ZIP structure to avoid polluting the plugins directory (expects a single `*.koplugin` folder at ZIP root).
+
 ## [1.2.1] - 2025-12-17
 
 ### Changed

@@ -389,6 +389,98 @@ function UIManager_Updates:showUpdatesList(patch_updates, plugin_updates, callba
     UIManager:show(button_dialog)
 end
 
+-- Show installable plugins list (from default repos) with checkboxes
+function UIManager_Updates:showInstallPluginsList(plugin_candidates, callback)
+    plugin_candidates = plugin_candidates or {}
+
+    if #plugin_candidates == 0 then
+        self:showInfo(_("No new plugins available"))
+        return
+    end
+
+    local checks = {}
+    local plugin_states = {}
+
+    for i, update in ipairs(plugin_candidates) do
+        plugin_states[i] = { update = update, selected = false }
+
+        local plugin_name = (update.installed_plugin and (update.installed_plugin.fullname or update.installed_plugin.name)) or (update.repo_config and update.repo_config.repo) or "unknown"
+        local author = (update.repo_config and update.repo_config.owner) or "unknown"
+        -- Strip trailing "plugin"/"PLUGIN" word from name (purely cosmetic)
+        local display_name = plugin_name:gsub("%s*[Pp][Ll][Uu][Gg][Ii][Nn]%s*$", "")
+
+        local display_text = T(_("%1 (by %2)"), display_name, author)
+
+        table.insert(checks, {
+            kind = "plugin",
+            update = update,
+            config = {
+                text = display_text,
+                checked = false,
+                callback = function()
+                    plugin_states[i].selected = not plugin_states[i].selected
+                end,
+                hold_callback = function()
+                    -- Reuse plugin details dialog (shows repo + changelog)
+                    self:showPluginDetails(update)
+                end,
+            },
+        })
+    end
+
+    local button_dialog
+    button_dialog = ButtonDialog:new{
+        title = T(_("Install New Plugins (%1)"), #plugin_candidates),
+        buttons = {
+            {
+                {
+                    text = _("Cancel"),
+                    callback = function()
+                        if button_dialog then
+                            button_dialog:onClose()
+                        end
+                    end,
+                },
+                {
+                    text = _("Install Selected"),
+                    callback = function()
+                        if button_dialog then
+                            button_dialog:onClose()
+                        end
+                        local selected = {}
+                        for _, state in ipairs(plugin_states) do
+                            if state.selected then
+                                table.insert(selected, state.update)
+                            end
+                        end
+                        if callback then
+                            callback(selected)
+                        end
+                    end,
+                },
+            },
+        },
+    }
+
+    -- Add line separator
+    button_dialog:addWidget(LineWidget:new{
+        dimen = Geom:new{
+            w = button_dialog.width - 2 * (Size.border.window + Size.padding.button),
+            h = Size.line.medium,
+        },
+        background = Blitbuffer.COLOR_GRAY,
+    })
+    button_dialog:addWidget(VerticalSpan:new{ width = Size.padding.default })
+
+    for _, check in ipairs(checks) do
+        check.config.parent = button_dialog
+        local check_button = CheckButton:new(check.config)
+        button_dialog:addWidget(self:_buildPluginUpdateRow(button_dialog, check_button, check.update))
+    end
+
+    UIManager:show(button_dialog)
+end
+
 -- Show patch details dialog (for updates)
 function UIManager_Updates:showPatchDetails(update)
     local PatchDescriptions = require("patch_descriptions")
@@ -400,15 +492,14 @@ function UIManager_Updates:showPatchDetails(update)
     local repo_url = repo_patch.repo_url or ""
     local size = repo_patch.size or local_patch.size or 0
     
-    -- Get description (priority: local > updates.json > comments)
+    -- Get description (priority: local > comments)
     local description = PatchDescriptions.getDescription(
         patch_name,
         repo_patch,
-        update.repo_content,
-        nil -- updates_json_data would be passed if available
+        update.repo_content
     )
     
-    -- If description from updates.json, use it
+    -- If description from repo_patch, use it
     if not description and repo_patch.description then
         description = repo_patch.description
     end
@@ -625,11 +716,16 @@ function UIManager_Updates:showUpdateProgress(current, total, patch_name)
 end
 
 -- Show update results
-function UIManager_Updates:showUpdateResults(successful, failed)
+function UIManager_Updates:showUpdateResults(successful, failed, opts)
     successful = successful or {}
     failed = failed or {}
+    opts = opts or {}
     
     local texts = {}
+    local header_success = opts.success_header or _("Successfully updated:")
+    local header_failed = opts.failed_header or _("Failed to update:")
+    local title = opts.title or _("Update Results")
+    local restart_message = opts.restart_message or _("Updates have been installed. Restart required.")
     
     -- Process successful patches and plugins
     if successful and type(successful) == "table" then
@@ -662,9 +758,8 @@ function UIManager_Updates:showUpdateResults(successful, failed)
             end
         end
         if #success_list > 0 then
-            local header = _("Successfully updated:")
             local list_text = table.concat(success_list, "\n")
-            local success_text = header .. "\n" .. list_text
+            local success_text = header_success .. "\n" .. list_text
             table.insert(texts, success_text)
         end
     end
@@ -700,7 +795,7 @@ function UIManager_Updates:showUpdateResults(successful, failed)
             end
         end
         if #failed_list > 0 then
-            local failed_text = _("Failed to update:") .. "\n" .. table.concat(failed_list, "\n")
+            local failed_text = header_failed .. "\n" .. table.concat(failed_list, "\n")
             table.insert(texts, failed_text)
         end
     end
@@ -713,7 +808,7 @@ function UIManager_Updates:showUpdateResults(successful, failed)
     -- Create button dialog - use local variable that will be captured in closure
     local button_dialog
     button_dialog = ButtonDialog:new{
-        title = _("Update Results"),
+        title = title,
         _added_widgets = {
             TextBoxWidget:new{
                 text = message,
@@ -731,7 +826,7 @@ function UIManager_Updates:showUpdateResults(successful, failed)
                             button_dialog:onClose()
                         end
                         if #successful > 0 then
-                            UIManager:askForRestart(_("Patches have been updated. Restart required."))
+                            UIManager:askForRestart(restart_message)
                         end
                     end,
                 },
