@@ -359,6 +359,26 @@ function UpdatesManager:checkForUpdates(force_refresh)
             end
         end
 
+        -- Try to load updates.json from repository
+        local function loadUpdatesJson(owner, repo, branch, path)
+            local updates_json_path = ""
+            if path and path ~= "" then
+                updates_json_path = path .. "/updates.json"
+            else
+                updates_json_path = "updates.json"
+            end
+
+            rateLimit()
+            local content = getFileContent(owner, repo, branch, updates_json_path)
+            if content then
+                local ok, data = pcall(json.decode, content)
+                if ok and data then
+                    return data
+                end
+            end
+            return nil
+        end
+
         local function scanRepositoryForPatches(repo_config, compute_md5_for_local_only)
             compute_md5_for_local_only = compute_md5_for_local_only or {}
             local owner = repo_config.owner
@@ -366,9 +386,23 @@ function UpdatesManager:checkForUpdates(force_refresh)
             local branch = repo_config.branch or "main"
             local path = repo_config.path or ""
 
+
+            -- Try to load updates.json first
+            local updates_json = loadUpdatesJson(owner, repo, branch, path)
+            local updates_json_map = {}
+            if updates_json and updates_json.patches then
+                for _, patch_info in ipairs(updates_json.patches) do
+                    local patch_key = patch_info.name or patch_info.filename
+                    if patch_key then
+                        patch_key = patch_key:gsub("%.lua$", "")
+                        updates_json_map[patch_key] = patch_info
+                    end
+                end
+            end
+
             local files = getRepositoryFiles(owner, repo, branch, path)
             if not files then
-                return {}
+                return {}, updates_json_map
             end
 
             local patches = {}
@@ -390,7 +424,21 @@ function UpdatesManager:checkForUpdates(force_refresh)
                         repo_url = string.format("https://github.com/%s/%s", owner, repo),
                     }
 
-                    -- Compute MD5 on-the-fly only if patch exists locally (to speed up comparison)
+                    -- Load metadata from updates.json if available
+                    if updates_json_map[patch_name] then
+                        patch_data.description = updates_json_map[patch_name].description
+                        patch_data.author = updates_json_map[patch_name].author
+                        patch_data.version = updates_json_map[patch_name].version
+                        -- Use MD5 from updates.json if available
+                        if updates_json_map[patch_name].md5 then
+                            patch_data.md5 = updates_json_map[patch_name].md5
+                            logger.dbg("UpdatesManager: Using MD5 from updates.json for:", patch_name)
+                        end
+                    end
+
+                    -- Compute MD5 on-the-fly only if:
+                    -- 1. MD5 not available from updates.json
+                    -- 2. Patch exists locally (to speed up comparison)
                     if not patch_data.md5 and compute_md5_for_local_only[patch_name] then
                         rateLimit()
                         local repo_content = getFileContent(owner, repo, branch, file.path)
@@ -420,7 +468,7 @@ function UpdatesManager:checkForUpdates(force_refresh)
                 end
             end
 
-            return patches
+            return patches, updates_json_map
         end
 
         local function scanLocalPatches()
@@ -514,7 +562,7 @@ function UpdatesManager:checkForUpdates(force_refresh)
 
                     rateLimit() -- Add delay to avoid rate limiting
                     -- Only compute MD5 for patches that exist locally
-                    local patches = scanRepositoryForPatches(repo_config, local_patch_names)
+                    local patches, updates_json_map = scanRepositoryForPatches(repo_config, local_patch_names)
 
                     -- Check if we got rate limited
                     if not patches and rate_limit_count > 0 then
@@ -830,7 +878,7 @@ function UpdatesManager:checkForUpdates(force_refresh)
 
         -- Run in subprocess to avoid blocking UI
         local trap_widget = UIManager_Updates.processing_msg
-        local trap_result = Trapper:dismissableRunInSubprocess(function()
+        local completed, result = Trapper:dismissableRunInSubprocess(function()
             -- Create progress callback that writes to file
             local function progressCallback(text)
                 local file = io.open(progress_file, "w")
@@ -846,21 +894,6 @@ function UpdatesManager:checkForUpdates(force_refresh)
             -- Callback for async completion
             handleResult(result)
         end)
-        
-        -- Show trap widget if returned (for proper subprocess handling)
-        if trap_result and trap_result ~= trap_widget then
-            UIManager:show(trap_result)
-        end
-        
-        -- Handle blocking mode (when subprocess didn't work)
-        local completed, result = nil, nil
-        if trap_result and type(trap_result) == "table" and trap_result.completed ~= nil then
-            completed = trap_result.completed
-            result = trap_result.result
-        elseif trap_result == trap_widget then
-            -- Subprocess is running, wait for callback
-            return
-        end
 
         -- If subprocess didn't work (blocking mode), handle result directly
         -- CRITICAL: In blocking mode, UI is frozen, so we MUST schedule result handling
@@ -1134,14 +1167,12 @@ function UpdatesManager:installUpdates(updates)
                 result_failed = failed
             end
 
-            UIManager_Updates:showUpdateResults(result_successful, result_failed, {
-                restart_message = _("Patches have been updated. Restart required."),
-            })
+            UIManager_Updates:showUpdateResults(result_successful, result_failed)
         end)
     end
 
     local trap_widget = UIManager_Updates.processing_msg
-    local trap_result = Trapper:dismissableRunInSubprocess(function()
+    local completed, results = Trapper:dismissableRunInSubprocess(function()
         for i, update in ipairs(updates) do
             local patch_name = update.local_patch.name or update.local_patch.filename
             local ok = installPatch(update)
@@ -1156,21 +1187,6 @@ function UpdatesManager:installUpdates(updates)
         -- Callback for async completion
         handleInstallResults(results)
     end)
-    
-    -- Show trap widget if returned (for proper subprocess handling)
-    if trap_result and trap_result ~= trap_widget then
-        UIManager:show(trap_result)
-    end
-    
-    -- Handle blocking mode (when subprocess didn't work)
-    local completed, results = nil, nil
-    if trap_result and type(trap_result) == "table" and trap_result.completed ~= nil then
-        completed = trap_result.completed
-        results = trap_result.result
-    elseif trap_result == trap_widget then
-        -- Subprocess is running, wait for callback
-        return
-    end
 
     -- If subprocess didn't work (blocking mode), handle result directly
     -- CRITICAL: In blocking mode, UI is frozen, so we MUST schedule result handling
@@ -1383,14 +1399,12 @@ function UpdatesManager:installPluginUpdates(plugin_updates)
                 result_failed = failed
             end
 
-            UIManager_Updates:showUpdateResults(result_successful, result_failed, {
-                restart_message = _("Plugins have been updated. Restart required."),
-            })
+            UIManager_Updates:showUpdateResults(result_successful, result_failed)
         end)
     end
 
     local trap_widget = UIManager_Updates.processing_msg
-    local trap_result = Trapper:dismissableRunInSubprocess(function()
+    local completed, results = Trapper:dismissableRunInSubprocess(function()
         for i, update in ipairs(plugin_updates) do
             local plugin_name = update.installed_plugin.name or "unknown"
             local ok = installPlugin(update)
@@ -1405,21 +1419,6 @@ function UpdatesManager:installPluginUpdates(plugin_updates)
         -- Callback for async completion
         handleInstallResults(results)
     end)
-    
-    -- Show trap widget if returned (for proper subprocess handling)
-    if trap_result and trap_result ~= trap_widget then
-        UIManager:show(trap_result)
-    end
-    
-    -- Handle blocking mode (when subprocess didn't work)
-    local completed, results = nil, nil
-    if trap_result and type(trap_result) == "table" and trap_result.completed ~= nil then
-        completed = trap_result.completed
-        results = trap_result.result
-    elseif trap_result == trap_widget then
-        -- Subprocess is running, wait for callback
-        return
-    end
 
     -- If subprocess didn't work (blocking mode), handle result directly
     if completed and results then
@@ -1436,498 +1435,6 @@ function UpdatesManager:installPluginUpdates(plugin_updates)
             UIManager_Updates:closeProcessing()
             UIManager:forceRePaint()
             UIManager_Updates:showInfo(_("Plugin update installation was cancelled"))
-        end)
-    end
-end
-
--- Install NEW plugins from active DEFAULT_PLUGIN_REPOS (only those not installed yet)
-function UpdatesManager:installNewPluginsFromDefaultRepos()
-    UIManager_Updates:checkNetwork(function()
-        UIManager_Updates:showProcessing(_("Checking for new plugins..."))
-
-        -- Pre-load modules
-        local Config = require("config")
-        local logger = require("logger")
-        local http = require("socket/http")
-        local ltn12 = require("ltn12")
-        local json = require("json")
-        local socketutil = require("socketutil")
-        local socket = require("socket")
-        local PluginManager = require("plugin_manager")
-
-        -- Inline HTTP functions
-        local function httpGet(url, headers)
-            headers = headers or {}
-            headers["User-Agent"] = headers["User-Agent"] or "KOReader-UpdatesManager/1.0"
-            headers["Accept"] = headers["Accept"] or "application/json"
-
-            -- Add GitHub token if available and URL is GitHub API
-            if url:match("api%.github%.com") or url:match("raw%.githubusercontent%.com") then
-                local token = getGitHubToken()
-                if token then
-                    headers["Authorization"] = "token " .. token
-                end
-            end
-
-            local response_body = {}
-            socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
-
-            local code, response_headers, status = socket.skip(1, http.request({
-                url = url,
-                method = "GET",
-                headers = headers,
-                sink = ltn12.sink.table(response_body),
-                redirect = true,
-            }))
-
-            socketutil:reset_timeout()
-
-            if code == socketutil.TIMEOUT_CODE or
-                code == socketutil.SSL_HANDSHAKE_CODE or
-                code == socketutil.SINK_TIMEOUT_CODE then
-                return nil, code or "timeout"
-            end
-
-            if response_headers == nil then
-                return nil, code or "network_error"
-            end
-
-            if code == 200 then
-                return table.concat(response_body), code, response_headers
-            else
-                return nil, code, response_headers
-            end
-        end
-
-        local function parseJSON(json_string)
-            local ok, result = pcall(json.decode, json_string)
-            return ok and result or nil
-        end
-
-        local last_request_time = 0
-        local function rateLimit()
-            local now = os.time()
-            local time_since_last = now - last_request_time
-            if time_since_last < 0.5 then
-                -- Delay handled by network latency
-            end
-            last_request_time = os.time()
-        end
-
-        -- Create progress file
-        local progress_file = Config.CACHE_DIR .. "/progress.txt"
-        local function writeProgress(text)
-            local file = io.open(progress_file, "w")
-            if file then
-                file:write(text or "")
-                file:close()
-            end
-        end
-
-        writeProgress("")
-
-        -- Monitor progress
-        local progress_monitor
-        local monitoring_active = true
-        local last_progress = ""
-        local last_update_time = 0
-        progress_monitor = function()
-            if not monitoring_active then
-                return
-            end
-
-            local file = io.open(progress_file, "r")
-            if file then
-                local content = file:read("*a")
-                file:close()
-                if content and content ~= "" and content ~= last_progress then
-                    last_progress = content
-                    local now = os.time()
-                    if now - last_update_time >= 0.3 then
-                        last_update_time = now
-                        UIManager_Updates:updateProcessing(content)
-                    end
-                end
-            end
-
-            if monitoring_active then
-                UIManager:scheduleIn(0.5, progress_monitor)
-            end
-        end
-
-        UIManager:scheduleIn(0.5, progress_monitor)
-
-        local function handleResult(result)
-            monitoring_active = false
-            UIManager:unschedule(progress_monitor)
-            writeProgress("")
-
-            UIManager_Updates:closeProcessing()
-            UIManager:forceRePaint()
-
-            UIManager:scheduleIn(0.1, function()
-                local candidates = type(result) == "table" and result or {}
-                UIManager_Updates:showInstallPluginsList(candidates, function(selected)
-                    if selected and #selected > 0 then
-                        self:installNewPlugins(selected)
-                    end
-                end)
-            end)
-        end
-
-        local trap_widget = UIManager_Updates.processing_msg
-        local trap_result = Trapper:dismissableRunInSubprocess(function()
-            local function progressCallback(text)
-                local file = io.open(progress_file, "w")
-                if file then
-                    file:write(text or "")
-                    file:close()
-                end
-            end
-
-            -- Only active DEFAULT_PLUGIN_REPOS (no custom, no commented)
-            local plugin_repos = Config.DEFAULT_PLUGIN_REPOS or {}
-            if #plugin_repos == 0 then
-                progressCallback(_("No default plugin repositories configured"))
-                return {}
-            end
-
-            -- Scan installed plugins
-            local installed_plugins = PluginManager.scanInstalledPlugins()
-
-            progressCallback(_("Searching installable plugins..."))
-            local candidates = PluginManager.getInstallCandidates(
-                plugin_repos,
-                installed_plugins,
-                httpGet,
-                parseJSON,
-                rateLimit
-            )
-
-            progressCallback(_("Checking complete..."))
-            return candidates or {}
-        end, trap_widget, function(result)
-            handleResult(result)
-        end)
-        
-        -- Show trap widget if returned (for proper subprocess handling)
-        if trap_result and trap_result ~= trap_widget then
-            UIManager:show(trap_result)
-        end
-        
-        -- Handle blocking mode (when subprocess didn't work)
-        local completed, result = nil, nil
-        if trap_result and type(trap_result) == "table" and trap_result.completed ~= nil then
-            completed = trap_result.completed
-            result = trap_result.result
-        elseif trap_result == trap_widget then
-            -- Subprocess is running, wait for callback
-            return
-        end
-
-        if completed and result then
-            UIManager:scheduleIn(0.2, function()
-                UIManager_Updates:closeProcessing()
-                UIManager:forceRePaint()
-                UIManager:scheduleIn(0.1, function()
-                    handleResult(result)
-                end)
-            end)
-        elseif not completed then
-            monitoring_active = false
-            UIManager:unschedule(progress_monitor)
-            writeProgress("")
-            UIManager:scheduleIn(0.2, function()
-                UIManager_Updates:closeProcessing()
-                UIManager:forceRePaint()
-                UIManager_Updates:showInfo(_("Operation was cancelled"))
-            end)
-        end
-    end)
-end
-
--- Install selected new plugins (from candidates returned by getInstallCandidates)
-function UpdatesManager:installNewPlugins(plugin_candidates)
-    if not plugin_candidates or #plugin_candidates == 0 then
-        return
-    end
-
-    UIManager_Updates:showProcessing(_("Installing new plugins..."))
-
-    -- Pre-load modules before subprocess
-    local logger = require("logger")
-    local lfs = require("libs/libkoreader-lfs")
-    local http = require("socket/http")
-    local ltn12 = require("ltn12")
-    local socketutil = require("socketutil")
-    local socket = require("socket")
-    local Device = require("device")
-    local Config = require("config")
-
-    -- Inline HTTP functions
-    local function downloadFile(url, local_path, headers)
-        headers = headers or {}
-        headers["User-Agent"] = headers["User-Agent"] or "KOReader-UpdatesManager/1.0"
-
-        local dir = local_path:match("^(.*)/")
-        if dir and dir ~= "" then
-            if lfs.attributes(dir, "mode") ~= "directory" then
-                lfs.mkdir(dir)
-            end
-        end
-
-        local file = io.open(local_path, "wb")
-        if not file then return false end
-
-        socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
-
-        local code, response_headers, status = socket.skip(1, http.request({
-            url = url,
-            method = "GET",
-            headers = headers,
-            sink = ltn12.sink.file(file),
-            redirect = true,
-        }))
-
-        socketutil:reset_timeout()
-
-        -- Safely close file (ltn12.sink.file may have already closed it)
-        pcall(function() file:close() end)
-
-        if code == socketutil.TIMEOUT_CODE or
-            code == socketutil.SSL_HANDSHAKE_CODE or
-            code == socketutil.SINK_TIMEOUT_CODE then
-            pcall(os.remove, local_path)
-            return false
-        end
-
-        if response_headers == nil then
-            pcall(os.remove, local_path)
-            return false
-        end
-
-        if code == 200 then
-            return true
-        else
-            pcall(os.remove, local_path)
-            return false
-        end
-    end
-
-    local function removeFile(path)
-        local ok = pcall(os.remove, path)
-        return ok
-    end
-
-    local function removeDir(path)
-        local is_windows = package.config:sub(1, 1) == "\\"
-        if is_windows then
-            os.execute(string.format('rmdir /S /Q "%s"', path))
-        else
-            os.execute(string.format('rm -rf "%s"', path))
-        end
-    end
-
-    local function listPluginDirs(dir)
-        local dirs = {}
-        if lfs.attributes(dir, "mode") ~= "directory" then
-            return dirs
-        end
-        for entry in lfs.dir(dir) do
-            if entry ~= "." and entry ~= ".." then
-                local p = dir .. "/" .. entry
-                if lfs.attributes(p, "mode") == "directory" and entry:match("%.koplugin$") then
-                    dirs[entry] = true
-                end
-            end
-        end
-        return dirs
-    end
-
-    local function listTopEntries(dir)
-        local entries = {}
-        if lfs.attributes(dir, "mode") ~= "directory" then
-            return entries
-        end
-        for entry in lfs.dir(dir) do
-            if entry ~= "." and entry ~= ".." then
-                local p = dir .. "/" .. entry
-                entries[entry] = lfs.attributes(p, "mode") or "unknown"
-            end
-        end
-        return entries
-    end
-
-    local function diffDirs(after, before)
-        local out = {}
-        for entry, _ in pairs(after or {}) do
-            if not (before and before[entry]) then
-                table.insert(out, entry)
-            end
-        end
-        return out
-    end
-
-    local function installNewPlugin(candidate)
-        local repo_config = candidate.repo_config or {}
-        local release = candidate.release or {}
-
-        local plugins_dir = Config.PLUGINS_DIR
-        if lfs.attributes(plugins_dir, "mode") ~= "directory" then
-            lfs.mkdir(plugins_dir)
-        end
-
-        local cache_dir = Config.CACHE_DIR
-        if lfs.attributes(cache_dir, "mode") ~= "directory" then
-            lfs.mkdir(cache_dir)
-        end
-
-        local safe_name = string.format("%s_%s", repo_config.owner or "unknown", repo_config.repo or "unknown")
-        safe_name = safe_name:gsub("[^%w%._%-]+", "_")
-        local zip_path = cache_dir .. "/" .. safe_name .. ".zip"
-
-        if not release.zip_url or not downloadFile(release.zip_url, zip_path) then
-            logger.err("UpdatesManager: Failed to download plugin ZIP for new install:", safe_name)
-            return false, { name = repo_config.repo or "unknown", fullname = repo_config.description or repo_config.repo or "unknown" }
-        end
-
-        local before_entries = listTopEntries(plugins_dir)
-
-        -- Extract into plugins directory, keeping the ZIP root folder (should be *.koplugin/)
-        local ok, err = Device:unpackArchive(zip_path, plugins_dir, false)
-        removeFile(zip_path)
-        if not ok then
-            logger.err("UpdatesManager: Failed to extract plugin ZIP:", err)
-            return false, { name = repo_config.repo or "unknown", fullname = repo_config.description or repo_config.repo or "unknown" }
-        end
-
-        local after_entries = listTopEntries(plugins_dir)
-        local new_entries = {}
-        for entry, mode in pairs(after_entries or {}) do
-            if not (before_entries and before_entries[entry]) then
-                table.insert(new_entries, { name = entry, mode = mode })
-            end
-        end
-
-        -- Validate: ZIP must add exactly one top-level entry, and it must be a *.koplugin directory
-        if #new_entries ~= 1 or new_entries[1].mode ~= "directory" or not new_entries[1].name:match("%.koplugin$") then
-            -- Cleanup any new top-level entries (files or directories)
-            for _, e in ipairs(new_entries) do
-                local p = plugins_dir .. "/" .. e.name
-                if e.mode == "directory" then
-                    removeDir(p)
-                else
-                    removeFile(p)
-                end
-            end
-            logger.err("UpdatesManager: Unexpected ZIP structure for plugin install (expected single *.koplugin folder at ZIP root)")
-            return false, { name = repo_config.repo or "unknown", fullname = repo_config.description or repo_config.repo or "unknown" }
-        end
-
-        local plugin_entry = new_entries[1].name
-        local plugin_path = plugins_dir .. "/" .. plugin_entry
-        local meta_file = plugin_path .. "/_meta.lua"
-
-        if lfs.attributes(meta_file, "mode") ~= "file" then
-            removeDir(plugin_path)
-            logger.err("UpdatesManager: Installed plugin missing _meta.lua:", plugin_entry)
-            return false, { name = repo_config.repo or "unknown", fullname = repo_config.description or repo_config.repo or "unknown" }
-        end
-
-        local ok_meta, meta_data = pcall(dofile, meta_file)
-        local plugin_name = plugin_entry:gsub("%.koplugin$", "")
-        local fullname = repo_config.description or plugin_name
-        local version = release.version or release.tag_name or "unknown"
-        if ok_meta and meta_data and type(meta_data) == "table" then
-            plugin_name = meta_data.name or plugin_name
-            fullname = meta_data.fullname or fullname
-            version = meta_data.version or version
-        end
-
-        return true, {
-            name = plugin_name,
-            fullname = fullname,
-            version = version,
-            description = (ok_meta and meta_data and meta_data.description) or (repo_config.description or ""),
-            path = plugin_path,
-            entry = plugin_entry,
-            meta = (ok_meta and meta_data) or nil,
-        }
-    end
-
-    local successful = {}
-    local failed = {}
-
-    local function handleInstallResults(results)
-        UIManager_Updates:closeProcessing()
-        UIManager:forceRePaint()
-
-        UIManager:scheduleIn(0.1, function()
-            local result_successful = {}
-            local result_failed = {}
-
-            if results then
-                if results.successful then result_successful = results.successful end
-                if results.failed then result_failed = results.failed end
-            end
-
-            if #result_successful == 0 and #result_failed == 0 then
-                result_successful = successful
-                result_failed = failed
-            end
-
-            UIManager_Updates:showUpdateResults(result_successful, result_failed, {
-                title = _("Install Results"),
-                success_header = _("Successfully installed:"),
-                failed_header = _("Failed to install:"),
-                restart_message = _("Plugins have been installed. Restart required."),
-            })
-        end)
-    end
-
-    local trap_widget = UIManager_Updates.processing_msg
-    local trap_result = Trapper:dismissableRunInSubprocess(function()
-        for _, candidate in ipairs(plugin_candidates) do
-            local ok, plugin_or_stub = installNewPlugin(candidate)
-            if ok then
-                table.insert(successful, plugin_or_stub)
-            else
-                table.insert(failed, plugin_or_stub)
-            end
-        end
-        return { successful = successful, failed = failed }
-    end, trap_widget, function(results)
-        handleInstallResults(results)
-    end)
-    
-    -- Show trap widget if returned (for proper subprocess handling)
-    if trap_result and trap_result ~= trap_widget then
-        UIManager:show(trap_result)
-    end
-    
-    -- Handle blocking mode (when subprocess didn't work)
-    local completed, results = nil, nil
-    if trap_result and type(trap_result) == "table" and trap_result.completed ~= nil then
-        completed = trap_result.completed
-        results = trap_result.result
-    elseif trap_result == trap_widget then
-        -- Subprocess is running, wait for callback
-        return
-    end
-
-    if completed and results then
-        UIManager:scheduleIn(0.2, function()
-            UIManager_Updates:closeProcessing()
-            UIManager:forceRePaint()
-            UIManager:scheduleIn(0.1, function()
-                handleInstallResults(results)
-            end)
-        end)
-    elseif not completed then
-        UIManager:scheduleIn(0.2, function()
-            UIManager_Updates:closeProcessing()
-            UIManager:forceRePaint()
-            UIManager_Updates:showInfo(_("Plugin installation was cancelled"))
         end)
     end
 end
@@ -2122,6 +1629,24 @@ function UpdatesManager:checkForPatchUpdates(force_refresh)
             end
         end
 
+        local function loadUpdatesJson(owner, repo, branch, path)
+            local updates_json_path = ""
+            if path and path ~= "" then
+                updates_json_path = path .. "/updates.json"
+            else
+                updates_json_path = "updates.json"
+            end
+
+            local content = getFileContent(owner, repo, branch, updates_json_path)
+            if content then
+                local ok, data = pcall(json.decode, content)
+                if ok and data then
+                    return data
+                end
+            end
+            return nil
+        end
+
         local function scanRepositoryForPatches(repo_config, compute_md5_for_local_only)
             compute_md5_for_local_only = compute_md5_for_local_only or {}
             local owner = repo_config.owner
@@ -2129,9 +1654,21 @@ function UpdatesManager:checkForPatchUpdates(force_refresh)
             local branch = repo_config.branch or "main"
             local path = repo_config.path or ""
 
+            local updates_json = loadUpdatesJson(owner, repo, branch, path)
+            local updates_json_map = {}
+            if updates_json and updates_json.patches then
+                for _, patch_info in ipairs(updates_json.patches) do
+                    local patch_key = patch_info.name or patch_info.filename
+                    if patch_key then
+                        patch_key = patch_key:gsub("%.lua$", "")
+                        updates_json_map[patch_key] = patch_info
+                    end
+                end
+            end
+
             local files = getRepositoryFiles(owner, repo, branch, path)
             if not files then
-                return {}
+                return {}, updates_json_map
             end
 
             local patches = {}
@@ -2152,7 +1689,21 @@ function UpdatesManager:checkForPatchUpdates(force_refresh)
                         repo_url = string.format("https://github.com/%s/%s", owner, repo),
                     }
 
-                    -- Compute MD5 on-the-fly only if patch exists locally (to speed up comparison)
+                    -- Load metadata from updates.json if available
+                    if updates_json_map[patch_name] then
+                        patch_data.description = updates_json_map[patch_name].description
+                        patch_data.author = updates_json_map[patch_name].author
+                        patch_data.version = updates_json_map[patch_name].version
+                        -- Use MD5 from updates.json if available
+                        if updates_json_map[patch_name].md5 then
+                            patch_data.md5 = updates_json_map[patch_name].md5
+                            logger.dbg("UpdatesManager: Using MD5 from updates.json for:", patch_name)
+                        end
+                    end
+
+                    -- Compute MD5 on-the-fly only if:
+                    -- 1. MD5 not available from updates.json
+                    -- 2. Patch exists locally (to speed up comparison)
                     if not patch_data.md5 and compute_md5_for_local_only[patch_name] then
                         rateLimit()
                         local repo_content = getFileContent(owner, repo, branch, file.path)
@@ -2181,7 +1732,7 @@ function UpdatesManager:checkForPatchUpdates(force_refresh)
                 end
             end
 
-            return patches
+            return patches, updates_json_map
         end
 
         local function scanLocalPatches()
@@ -2267,7 +1818,7 @@ function UpdatesManager:checkForPatchUpdates(force_refresh)
                     progress_callback(T(_("Scanning repository %1/%2: %3"), i, total_repos, repo_name))
 
                     rateLimit()
-                    local patches = scanRepositoryForPatches(repo_config, local_patch_names)
+                    local patches, updates_json_map = scanRepositoryForPatches(repo_config, local_patch_names)
 
                     if not patches and rate_limit_count > 0 then
                         rate_limit_count = rate_limit_count + 1
@@ -2517,7 +2068,7 @@ function UpdatesManager:checkForPatchUpdates(force_refresh)
         end
 
         local trap_widget = UIManager_Updates.processing_msg
-        local trap_result = Trapper:dismissableRunInSubprocess(function()
+        local completed, result = Trapper:dismissableRunInSubprocess(function()
             local function progressCallback(text)
                 local file = io.open(progress_file, "w")
                 if file then
@@ -2530,21 +2081,6 @@ function UpdatesManager:checkForPatchUpdates(force_refresh)
         end, trap_widget, function(result)
             handleResult(result)
         end)
-        
-        -- Show trap widget if returned (for proper subprocess handling)
-        if trap_result and trap_result ~= trap_widget then
-            UIManager:show(trap_result)
-        end
-        
-        -- Handle blocking mode (when subprocess didn't work)
-        local completed, result = nil, nil
-        if trap_result and type(trap_result) == "table" and trap_result.completed ~= nil then
-            completed = trap_result.completed
-            result = trap_result.result
-        elseif trap_result == trap_widget then
-            -- Subprocess is running, wait for callback
-            return
-        end
 
         if completed and result then
             monitoring_active = false
@@ -2720,7 +2256,7 @@ function UpdatesManager:checkForPluginUpdates(force_refresh)
         end
 
         local trap_widget = UIManager_Updates.processing_msg
-        local trap_result = Trapper:dismissableRunInSubprocess(function()
+        local completed, result = Trapper:dismissableRunInSubprocess(function()
             local function progressCallback(text)
                 local file = io.open(progress_file, "w")
                 if file then
@@ -2755,21 +2291,6 @@ function UpdatesManager:checkForPluginUpdates(force_refresh)
         end, trap_widget, function(result)
             handleResult(result)
         end)
-        
-        -- Show trap widget if returned (for proper subprocess handling)
-        if trap_result and trap_result ~= trap_widget then
-            UIManager:show(trap_result)
-        end
-        
-        -- Handle blocking mode (when subprocess didn't work)
-        local completed, result = nil, nil
-        if trap_result and type(trap_result) == "table" and trap_result.completed ~= nil then
-            completed = trap_result.completed
-            result = trap_result.result
-        elseif trap_result == trap_widget then
-            -- Subprocess is running, wait for callback
-            return
-        end
 
         if completed and result then
             monitoring_active = false
@@ -2889,12 +2410,6 @@ function UpdatesManager:addToMainMenu(menu_items)
                         text = _("Force Refresh"),
                         callback = function()
                             self:checkForPluginUpdates(true)
-                        end,
-                    },
-                    {
-                        text = _("Install New Plugins"),
-                        callback = function()
-                            self:installNewPluginsFromDefaultRepos()
                         end,
                     },
                     {

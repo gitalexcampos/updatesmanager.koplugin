@@ -389,170 +389,6 @@ function UIManager_Updates:showUpdatesList(patch_updates, plugin_updates, callba
     UIManager:show(button_dialog)
 end
 
--- Show installable plugins list (from default repos) with checkboxes
-function UIManager_Updates:showInstallPluginsList(plugin_candidates, callback)
-    plugin_candidates = plugin_candidates or {}
-
-    if #plugin_candidates == 0 then
-        self:showInfo(_("No new plugins available"))
-        return
-    end
-
-    -- Pagination settings
-    local ITEMS_PER_PAGE = 10
-    local total_items = #plugin_candidates
-    local total_pages = math.ceil(total_items / ITEMS_PER_PAGE)
-
-    -- Prepare all plugin states (persist selections across pages)
-    local plugin_states = {}
-    for i, update in ipairs(plugin_candidates) do
-        plugin_states[i] = { update = update, selected = false }
-    end
-
-    -- Prepare all checks (for all pages)
-    local all_checks = {}
-    for i, update in ipairs(plugin_candidates) do
-        local plugin_name = (update.installed_plugin and (update.installed_plugin.fullname or update.installed_plugin.name)) or (update.repo_config and update.repo_config.repo) or "unknown"
-        local author = (update.repo_config and update.repo_config.owner) or "unknown"
-        -- Strip trailing "plugin"/"PLUGIN" word from name (purely cosmetic)
-        local display_name = plugin_name:gsub("%s*[Pp][Ll][Uu][Gg][Ii][Nn]%s*$", "")
-
-        local display_text = T(_("%1 (by %2)"), display_name, author)
-
-        table.insert(all_checks, {
-            kind = "plugin",
-            update = update,
-            index = i,
-            config = {
-                text = display_text,
-                checked = false,
-                callback = function()
-                    plugin_states[i].selected = not plugin_states[i].selected
-                end,
-                hold_callback = function()
-                    -- Reuse plugin details dialog (shows repo + changelog)
-                    self:showPluginDetails(update)
-                end,
-            },
-        })
-    end
-
-    -- Current page state
-    local current_page = 1
-
-    -- Function to show a specific page
-    local function showPage(page_num)
-        if page_num < 1 or page_num > total_pages then
-            return
-        end
-        current_page = page_num
-
-        -- Close previous dialog if exists
-        if self._install_plugins_dialog then
-            UIManager:close(self._install_plugins_dialog)
-        end
-
-        -- Calculate items for this page
-        local start_idx = (page_num - 1) * ITEMS_PER_PAGE + 1
-        local end_idx = math.min(start_idx + ITEMS_PER_PAGE - 1, total_items)
-        local page_checks = {}
-        for i = start_idx, end_idx do
-            local check = all_checks[i]
-            if check then
-                -- Update checked state from plugin_states
-                check.config.checked = plugin_states[check.index].selected
-                table.insert(page_checks, check)
-            end
-        end
-
-        -- Prepare buttons (main row)
-        local buttons = {
-            {
-                {
-                    text = _("Cancel"),
-                    callback = function()
-                        if self._install_plugins_dialog then
-                            self._install_plugins_dialog:onClose()
-                        end
-                        self._install_plugins_dialog = nil
-                    end,
-                },
-                {
-                    text = _("Install Selected"),
-                    callback = function()
-                        if self._install_plugins_dialog then
-                            self._install_plugins_dialog:onClose()
-                        end
-                        local selected = {}
-                        for _, state in ipairs(plugin_states) do
-                            if state.selected then
-                                table.insert(selected, state.update)
-                            end
-                        end
-                        self._install_plugins_dialog = nil
-                        if callback then
-                            callback(selected)
-                        end
-                    end,
-                },
-            },
-        }
-
-        -- Add navigation row if needed
-        if total_pages > 1 then
-            local nav_row = {}
-            if page_num > 1 then
-                table.insert(nav_row, {
-                    text = _("Previous"),
-                    callback = function()
-                        showPage(page_num - 1)
-                    end,
-                })
-            end
-            if page_num < total_pages then
-                table.insert(nav_row, {
-                    text = _("Next"),
-                    callback = function()
-                        showPage(page_num + 1)
-                    end,
-                })
-            end
-            if #nav_row > 0 then
-                table.insert(buttons, nav_row)
-            end
-        end
-
-        -- Create dialog for this page
-        local button_dialog = ButtonDialog:new{
-            title = T(_("Install New Plugins (%1) - Page %2/%3"), total_items, page_num, total_pages),
-            buttons = buttons,
-        }
-
-        -- Add line separator
-        button_dialog:addWidget(LineWidget:new{
-            dimen = Geom:new{
-                w = button_dialog.width - 2 * (Size.border.window + Size.padding.button),
-                h = Size.line.medium,
-            },
-            background = Blitbuffer.COLOR_GRAY,
-        })
-        button_dialog:addWidget(VerticalSpan:new{ width = Size.padding.default })
-
-        -- Add checkboxes for this page
-        for _, check in ipairs(page_checks) do
-            check.config.parent = button_dialog
-            local check_button = CheckButton:new(check.config)
-            button_dialog:addWidget(self:_buildPluginUpdateRow(button_dialog, check_button, check.update))
-        end
-
-        self._install_plugins_dialog = button_dialog
-        UIManager:show(button_dialog)
-    end
-
-    -- Show first page
-    showPage(1)
-end
-
 -- Show patch details dialog (for updates)
 function UIManager_Updates:showPatchDetails(update)
     local PatchDescriptions = require("patch_descriptions")
@@ -564,14 +400,15 @@ function UIManager_Updates:showPatchDetails(update)
     local repo_url = repo_patch.repo_url or ""
     local size = repo_patch.size or local_patch.size or 0
     
-    -- Get description (priority: local > comments)
+    -- Get description (priority: local > updates.json > comments)
     local description = PatchDescriptions.getDescription(
         patch_name,
         repo_patch,
-        update.repo_content
+        update.repo_content,
+        nil -- updates_json_data would be passed if available
     )
     
-    -- If description from repo_patch, use it
+    -- If description from updates.json, use it
     if not description and repo_patch.description then
         description = repo_patch.description
     end
@@ -788,16 +625,11 @@ function UIManager_Updates:showUpdateProgress(current, total, patch_name)
 end
 
 -- Show update results
-function UIManager_Updates:showUpdateResults(successful, failed, opts)
+function UIManager_Updates:showUpdateResults(successful, failed)
     successful = successful or {}
     failed = failed or {}
-    opts = opts or {}
     
     local texts = {}
-    local header_success = opts.success_header or _("Successfully updated:")
-    local header_failed = opts.failed_header or _("Failed to update:")
-    local title = opts.title or _("Update Results")
-    local restart_message = opts.restart_message or _("Updates have been installed. Restart required.")
     
     -- Process successful patches and plugins
     if successful and type(successful) == "table" then
@@ -830,8 +662,9 @@ function UIManager_Updates:showUpdateResults(successful, failed, opts)
             end
         end
         if #success_list > 0 then
+            local header = _("Successfully updated:")
             local list_text = table.concat(success_list, "\n")
-            local success_text = header_success .. "\n" .. list_text
+            local success_text = header .. "\n" .. list_text
             table.insert(texts, success_text)
         end
     end
@@ -867,7 +700,7 @@ function UIManager_Updates:showUpdateResults(successful, failed, opts)
             end
         end
         if #failed_list > 0 then
-            local failed_text = header_failed .. "\n" .. table.concat(failed_list, "\n")
+            local failed_text = _("Failed to update:") .. "\n" .. table.concat(failed_list, "\n")
             table.insert(texts, failed_text)
         end
     end
@@ -880,7 +713,7 @@ function UIManager_Updates:showUpdateResults(successful, failed, opts)
     -- Create button dialog - use local variable that will be captured in closure
     local button_dialog
     button_dialog = ButtonDialog:new{
-        title = title,
+        title = _("Update Results"),
         _added_widgets = {
             TextBoxWidget:new{
                 text = message,
@@ -898,7 +731,7 @@ function UIManager_Updates:showUpdateResults(successful, failed, opts)
                             button_dialog:onClose()
                         end
                         if #successful > 0 then
-                            UIManager:askForRestart(restart_message)
+                            UIManager:askForRestart(_("Patches have been updated. Restart required."))
                         end
                     end,
                 },

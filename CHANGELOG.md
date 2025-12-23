@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.3.2] - 2025-12-23
+
+- Revert Install Plugins feature till I find a proper solution to avoid crashes
+
 ## [1.3.1] - 2025-12-22
 
 ### Changed
