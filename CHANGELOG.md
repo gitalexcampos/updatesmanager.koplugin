@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.5] - 2026-01-06
+
+### Added
+- Added 4 new patch repositories: `timault/KOReader-Patch`, `Euphoriyy/KOReader.patches`, `quanganhdo/koreader-user-patches`, `rkram5424/KOReader.patches`
+- Added `TomasDiLeo/pageturner.koplugin` to the default plugin repositories
+- Added 6 new commented plugin repositories: `mm-malkani/screenshotorganizer.koplugin`, `fischer-hub/annas.koplugin`, `right9code/imagesearch.koplugin`, `right9code/fontswitcher.koplugin`, `right9code/sleepwaketracker.koplugin`, `CezaryPukownik/koreader-notion-sync`
+
 ## [1.3.4] - 2026-01-06
 
 ### Added

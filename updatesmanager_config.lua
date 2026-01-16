@@ -159,6 +159,34 @@ Config.DEFAULT_PATCH_REPOS = {
         path = "",
         description = "Medinauta's patches",
     },
+    {
+        owner = "timault",
+        repo = "KOReader-Patch",
+        branch = "main",
+        path = "",
+        description = "Timault's patches",
+    },
+    {
+        owner = "Euphoriyy",
+        repo = "KOReader.patches",
+        branch = "main",
+        path = "",
+        description = "Euphoriyy's patches",
+    },
+    {
+        owner = "quanganhdo",
+        repo = "koreader-user-patches",
+        branch = "main",
+        path = "",
+        description = "Quanganhdo's patches",
+    },
+    {
+        owner = "rkram5424",
+        repo = "KOReader.patches",
+        branch = "main",
+        path = "",
+        description = "Rkram5424's patches",
+    },
 }
 
 -- Commented out patch repositories (no proper releases or structure)
@@ -452,6 +480,11 @@ Config.DEFAULT_PLUGIN_REPOS = {
         repo = "readmastery.koplugin",
         description = "Read Mastery plugin",
     },
+    {
+        owner = "TomasDiLeo",
+        repo = "pageturner.koplugin",
+        description = "Page Turner plugin",
+    },
     -- {
     --     owner = "xconny",
     --     repo = "Koreader-Senet",
@@ -482,6 +515,36 @@ Config.DEFAULT_PLUGIN_REPOS = {
     --     owner = "k-nacion",
     --     repo = "highlightsscreensaver.koplugin",
     --     description = "Highlights Screensaver plugin",
+    -- },
+    -- {
+    --     owner = "mm-malkani",
+    --     repo = "screenshotorganizer.koplugin",
+    --     description = "Screenshot Organizer plugin",
+    -- },
+    -- {
+    --     owner = "fischer-hub",
+    --     repo = "annas.koplugin",
+    --     description = "Annas plugin",
+    -- },
+    -- {
+    --     owner = "right9code",
+    --     repo = "imagesearch.koplugin",
+    --     description = "Image Search plugin",
+    -- },
+    -- {
+    --     owner = "right9code",
+    --     repo = "fontswitcher.koplugin",
+    --     description = "Font Switcher plugin",
+    -- },
+    -- {
+    --     owner = "right9code",
+    --     repo = "sleepwaketracker.koplugin",
+    --     description = "Sleep/Wake Tracker plugin",
+    -- },
+    -- {
+    --     owner = "CezaryPukownik",
+    --     repo = "koreader-notion-sync",
+    --     description = "Notion Sync plugin",
     -- },
 }
 
