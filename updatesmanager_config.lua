@@ -546,6 +546,11 @@ Config.DEFAULT_PLUGIN_REPOS = {
     --     repo = "koreader-notion-sync",
     --     description = "Notion Sync plugin",
     -- },
+    {
+        owner = "zeeyado",
+        repo = "koassistant.koplugin",
+        description = "AI Assistant plugin",
+    },
 }
 
 -- Paths
